@@ -11,23 +11,32 @@
 	<groupId>io.github.davidmasdev</groupId>
 	<artifactId>ledger-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
+	<name>ledger-service</name>
+	<description>Double-entry ledger REST service built with Spring Boot</description>
+	<url>https://github.com/davidmasdev/ledger-service</url>
 	<licenses>
-		<license/>
+		<license>
+			<name>MIT License</name>
+			<url>https://opensource.org/licenses/MIT</url>
+		</license>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer>
+			<id>davidmasdev</id>
+			<name>David Mas Almendros</name>
+			<url>https://davidmas.dev</url>
+		</developer>
 	</developers>
 	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
+		<connection>scm:git:https://github.com/davidmasdev/ledger-service.git</connection>
+		<developerConnection>scm:git:git@github.com:davidmasdev/ledger-service.git</developerConnection>
+		<tag>HEAD</tag>
+		<url>https://github.com/davidmasdev/ledger-service</url>
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+		<spotless.version>3.10.3</spotless.version>
+		<palantir-java-format.version>2.102.0</palantir-java-format.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -113,6 +122,29 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>com.diffplug.spotless</groupId>
+				<artifactId>spotless-maven-plugin</artifactId>
+				<version>${spotless.version}</version>
+				<configuration>
+					<java>
+						<palantirJavaFormat>
+							<version>${palantir-java-format.version}</version>
+						</palantirJavaFormat>
+						<removeUnusedImports/>
+						<trimTrailingWhitespace/>
+						<endWithNewline/>
+					</java>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<phase>verify</phase>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
