@@ -36,3 +36,6 @@ build/
 *~
 *.un~
 *.swp
+
+### Claude Code ###
+.claude/settings.local.json

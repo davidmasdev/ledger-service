@@ -29,6 +29,11 @@ Every line must be explainable in an interview.
 - Schema changes = a new Flyway migration `V<n>__<description>.sql`. Never edit an applied migration.
 - Prefer records for DTOs; do not expose JPA entities from controllers.
 
+## Guardrails (automatic, see `.claude/settings.json`)
+- Every edited `.java` file is formatted by Spotless (palantir-java-format) right after the edit. Don't fight the formatter.
+- `./mvnw verify` (tests + `spotless:check`) runs when a turn ends with changes under `src/` or `pom.xml`; a red build must be fixed before finishing.
+- CI (`.github/workflows/ci.yml`) runs the same `verify` on every push and PR.
+
 ## Workflow
 - Plan before non-trivial changes; wait for approval.
 - Write or update tests first, then implement.
