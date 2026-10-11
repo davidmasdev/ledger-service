@@ -4,8 +4,7 @@ set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-$(dirname "$0")/../..}"
 
 # Don't loop: if Claude is already continuing because of this hook, let it stop.
-active=$(node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(!!JSON.parse(s||"{}").stop_hook_active)))')
-[ "$active" = "true" ] && exit 0
+grep -Eq '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && exit 0
 
 # Skip when nothing under src/ or pom.xml changed.
 git status --porcelain -- src pom.xml | grep -q . || exit 0
