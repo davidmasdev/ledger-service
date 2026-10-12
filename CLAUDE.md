@@ -6,12 +6,13 @@ Every line must be explainable in an interview.
 ## Stack
 - Java 25, Spring Boot 4.1 (Web MVC, Data JPA, Validation, Actuator), Maven wrapper
 - PostgreSQL 17, schema managed only by Flyway (`src/main/resources/db/migration`), JPA runs with `ddl-auto: validate`
-- Tests: JUnit 5, Testcontainers (Docker must be running)
+- Kafka (Spring for Apache Kafka): journal-entry events, published via the transactional outbox (`outbox` package)
+- Tests: JUnit 5, Testcontainers for PostgreSQL and Kafka (Docker must be running)
 
 ## Commands
 - Build and run all tests: `./mvnw verify`
 - Single test class: `./mvnw test -Dtest=ClassName`
-- Run locally: `./mvnw spring-boot:run` (starts Postgres from `compose.yaml` automatically)
+- Run locally: `./mvnw spring-boot:run` (starts Postgres and Kafka from `compose.yaml` automatically; Kafka needs host port 9092)
 - Run with Testcontainers instead: `./mvnw spring-boot:test-run`
 
 ## Domain invariants (never violate)
@@ -22,6 +23,7 @@ Every line must be explainable in an interview.
 - An account with `allow_negative = false` never has a negative balance. The check runs under `SELECT … FOR UPDATE` on the accounts the entry debits, for every write (entries, reversals, transfers).
 - When locking several accounts, lock them in ascending id order (deadlock avoidance).
 - Writes that move money accept an `Idempotency-Key`; a replay returns the original response.
+- Every journal entry writes exactly one outbox event in the same transaction. Never publish to Kafka from a business transaction; only `OutboxRelay` talks to Kafka.
 
 ## Conventions
 - Package by feature under `io.github.davidmasdev.ledgerservice` (e.g. `account`, `journal`), not by layer.
