@@ -8,9 +8,13 @@ import io.github.davidmasdev.ledgerservice.idempotency.IdempotencyService;
 import io.github.davidmasdev.ledgerservice.shared.BusinessRuleViolationException;
 import io.github.davidmasdev.ledgerservice.shared.ConflictException;
 import io.github.davidmasdev.ledgerservice.shared.NotFoundException;
+import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -28,7 +32,11 @@ public class JournalEntryService {
 
     @Transactional
     public JournalEntryResponse post(String idempotencyKey, PostJournalEntryRequest request) {
-        long entryId = idempotency.execute(idempotencyKey, fingerprint(request), () -> create(request));
+        var lines = request.postings().stream()
+                .map(p -> new PostingLine(p.accountId(), p.currency(), p.amount()))
+                .toList();
+        long entryId =
+                idempotency.execute(idempotencyKey, fingerprint(request), () -> record(request.description(), lines));
         return JournalEntryResponse.from(find(entryId));
     }
 
@@ -59,13 +67,13 @@ public class JournalEntryService {
         return JournalEntryResponse.from(find(entryId));
     }
 
-    private long create(PostJournalEntryRequest request) {
-        var lines = request.postings().stream()
-                .map(p -> new PostingLine(p.accountId(), p.currency(), p.amount()))
-                .toList();
-        var entry = JournalEntry.create(request.description(), lines);
-        checkAccounts(lines);
-        return entries.save(entry).getId();
+    /**
+     * Records a new entry in the caller's transaction, for features built on journal entries such as transfers. The
+     * caller is responsible for idempotency.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long record(String description, List<PostingLine> lines) {
+        return save(JournalEntry.create(description, lines));
     }
 
     private long createReversal(long entryId) {
@@ -74,21 +82,56 @@ public class JournalEntryService {
         if (entries.existsByReversalOf(entryId)) {
             throw new ConflictException("Journal entry %d has already been reversed".formatted(entryId));
         }
-        return entries.save(JournalEntry.reversalOf(original)).getId();
+        return save(JournalEntry.reversalOf(original));
+    }
+
+    /** The single write path: every entry is checked against its accounts and their balances before it is saved. */
+    private long save(JournalEntry entry) {
+        var accountsById = checkAccounts(entry.getPostings());
+        checkBalances(entry.getPostings(), accountsById);
+        return entries.save(entry).getId();
     }
 
     /** Every posting must target an existing account in that account's currency. */
-    private void checkAccounts(List<PostingLine> lines) {
-        var ids = lines.stream().map(PostingLine::accountId).distinct().toList();
+    private Map<Long, Account> checkAccounts(List<Posting> postings) {
+        var ids = postings.stream().map(Posting::getAccountId).distinct().toList();
         var byId = accounts.findAllById(ids).stream().collect(toMap(Account::getId, Function.identity()));
-        for (var line : lines) {
-            var account = byId.get(line.accountId());
+        for (var posting : postings) {
+            var account = byId.get(posting.getAccountId());
             if (account == null) {
-                throw new BusinessRuleViolationException("Account %d does not exist".formatted(line.accountId()));
+                throw new BusinessRuleViolationException("Account %d does not exist".formatted(posting.getAccountId()));
             }
-            if (!account.getCurrency().equals(line.currency())) {
+            if (!account.getCurrency().equals(posting.getCurrency())) {
                 throw new BusinessRuleViolationException("Account %d holds %s, so it cannot take a posting in %s"
-                        .formatted(line.accountId(), account.getCurrency(), line.currency()));
+                        .formatted(posting.getAccountId(), account.getCurrency(), posting.getCurrency()));
+            }
+        }
+        return byId;
+    }
+
+    /**
+     * Accounts that may not go negative and lose money in this entry are locked, then checked. The lock is held until
+     * commit, so concurrent debits of the same account run one after another, and each one's balance query (a new
+     * statement under READ COMMITTED) sees the postings of those before it. Accounts that only receive money are not
+     * locked: a concurrent credit can only make the check more conservative.
+     */
+    private void checkBalances(List<Posting> postings, Map<Long, Account> accountsById) {
+        Map<Long, BigDecimal> netChange = new HashMap<>();
+        for (var posting : postings) {
+            netChange.merge(posting.getAccountId(), posting.getAmount(), BigDecimal::add);
+        }
+        var debitedProtectedAccounts = netChange.entrySet().stream()
+                .filter(change -> change.getValue().signum() < 0)
+                .filter(change -> !accountsById.get(change.getKey()).isAllowNegative())
+                .map(Map.Entry::getKey)
+                .toList();
+        if (debitedProtectedAccounts.isEmpty()) {
+            return;
+        }
+        for (var account : accounts.lockForUpdate(debitedProtectedAccounts)) {
+            var balanceAfter = accounts.balanceOf(account.getId()).add(netChange.get(account.getId()));
+            if (balanceAfter.signum() < 0) {
+                throw new BusinessRuleViolationException("Insufficient funds in account %d".formatted(account.getId()));
             }
         }
     }

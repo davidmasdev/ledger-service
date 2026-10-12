@@ -24,6 +24,7 @@ class AccountApiTests {
         assertThat(result).hasStatus(HttpStatus.CREATED).containsHeader("Location");
         assertThat(result).bodyJson().extractingPath("$.currency").isEqualTo("USD");
         assertThat(result).bodyJson().extractingPath("$.balance").isEqualTo("0.00");
+        assertThat(result).bodyJson().extractingPath("$.allowNegative").isEqualTo(false);
 
         var location = result.getResponse().getHeader("Location");
         assertThat(mvc.get().uri(location))
@@ -31,6 +32,20 @@ class AccountApiTests {
                 .bodyJson()
                 .extractingPath("$.balance")
                 .isEqualTo("0.00");
+    }
+
+    @Test
+    void opensAccountThatMayGoNegative() {
+        var result = mvc.post()
+                .uri("/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "%s", "currency": "USD", "allowNegative": true}
+                        """.formatted(uniqueName()))
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+        assertThat(result).bodyJson().extractingPath("$.allowNegative").isEqualTo(true);
     }
 
     @Test

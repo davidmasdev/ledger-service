@@ -86,8 +86,9 @@ class LedgerSchemaTests {
                 .hasMessageContaining("append-only");
     }
 
+    /** These tests are about the schema, not overdrafts, so accounts may go negative. */
     private long openAccount(String currency) {
-        return accounts.open(new CreateAccountRequest("account-" + UUID.randomUUID(), currency))
+        return accounts.open(new CreateAccountRequest("account-" + UUID.randomUUID(), currency, true))
                 .id();
     }
 }

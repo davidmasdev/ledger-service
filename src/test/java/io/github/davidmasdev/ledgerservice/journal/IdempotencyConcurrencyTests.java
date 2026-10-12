@@ -29,9 +29,9 @@ class IdempotencyConcurrencyTests {
 
     @Test
     void concurrentRequestsWithSameKeyPostExactlyOnce() throws Exception {
-        long a = accounts.open(new CreateAccountRequest("account-" + UUID.randomUUID(), "USD"))
+        long a = accounts.open(new CreateAccountRequest("account-" + UUID.randomUUID(), "USD", false))
                 .id();
-        long b = accounts.open(new CreateAccountRequest("account-" + UUID.randomUUID(), "USD"))
+        long b = accounts.open(new CreateAccountRequest("account-" + UUID.randomUUID(), "USD", true))
                 .id();
         var key = UUID.randomUUID().toString();
         var request = new PostJournalEntryRequest(

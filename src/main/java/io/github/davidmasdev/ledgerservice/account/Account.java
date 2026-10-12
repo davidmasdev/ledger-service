@@ -24,14 +24,18 @@ public class Account {
     @Column(nullable = false, length = 3)
     private String currency;
 
+    @Column(name = "allow_negative", nullable = false)
+    private boolean allowNegative;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     protected Account() {} // for JPA
 
-    public Account(String name, String currency) {
+    public Account(String name, String currency, boolean allowNegative) {
         this.name = name;
         this.currency = Money.currency(currency).getCurrencyCode();
+        this.allowNegative = allowNegative;
         // PostgreSQL stores microseconds; truncating keeps the in-memory value equal to the stored one.
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
@@ -46,6 +50,10 @@ public class Account {
 
     public String getCurrency() {
         return currency;
+    }
+
+    public boolean isAllowNegative() {
+        return allowNegative;
     }
 
     public Instant getCreatedAt() {

@@ -177,18 +177,76 @@ class JournalEntryApiTests {
     }
 
     @Test
+    void rejectsEntryThatWouldOverdrawProtectedAccount() {
+        long funding = openAccount("USD");
+        long protectedAccount = openProtectedAccount("USD");
+
+        assertThat(post(newKey(), entry(posting(protectedAccount, "USD", "-0.01"), posting(funding, "USD", "0.01"))))
+                .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+                .bodyJson()
+                .extractingPath("$.detail")
+                .asString()
+                .contains("Insufficient funds");
+        assertThat(balanceOf(protectedAccount)).isEqualTo("0.00");
+    }
+
+    @Test
+    void protectedAccountCanBeSpentDownToExactlyZero() {
+        long funding = openAccount("USD");
+        long protectedAccount = openProtectedAccount("USD");
+        post(newKey(), entry(posting(funding, "USD", "-50.00"), posting(protectedAccount, "USD", "50.00")));
+
+        assertThat(post(newKey(), entry(posting(protectedAccount, "USD", "-50.00"), posting(funding, "USD", "50.00"))))
+                .hasStatus(HttpStatus.CREATED);
+        assertThat(balanceOf(protectedAccount)).isEqualTo("0.00");
+    }
+
+    @Test
+    void accountThatAllowsNegativeBalanceCanGoNegative() {
+        long funding = openAccount("USD");
+        long protectedAccount = openProtectedAccount("USD");
+
+        assertThat(post(newKey(), entry(posting(funding, "USD", "-75.00"), posting(protectedAccount, "USD", "75.00"))))
+                .hasStatus(HttpStatus.CREATED);
+        assertThat(balanceOf(funding)).isEqualTo("-75.00");
+    }
+
+    @Test
+    void reversalThatWouldOverdrawProtectedAccountIsRejected() {
+        long funding = openAccount("USD");
+        long protectedAccount = openProtectedAccount("USD");
+        long other = openProtectedAccount("USD");
+        long fundingEntry = idOf(
+                post(newKey(), entry(posting(funding, "USD", "-50.00"), posting(protectedAccount, "USD", "50.00"))));
+        post(newKey(), entry(posting(protectedAccount, "USD", "-30.00"), posting(other, "USD", "30.00")));
+
+        // Undoing the funding would take 50.00 from an account that only holds 20.00.
+        assertThat(reverse(newKey(), fundingEntry)).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(balanceOf(protectedAccount)).isEqualTo("20.00");
+    }
+
+    @Test
     void returnsNotFoundForUnknownEntry() {
         assertThat(mvc.get().uri("/journal-entries/{id}", Long.MAX_VALUE)).hasStatus(HttpStatus.NOT_FOUND);
         assertThat(reverse(newKey(), Long.MAX_VALUE)).hasStatus(HttpStatus.NOT_FOUND);
     }
 
+    /** Most tests here are about entries, not overdrafts, so their accounts may go negative. */
     private long openAccount(String currency) {
+        return open(currency, true);
+    }
+
+    private long openProtectedAccount(String currency) {
+        return open(currency, false);
+    }
+
+    private long open(String currency, boolean allowNegative) {
         var result = mvc.post()
                 .uri("/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"name": "account-%s", "currency": "%s"}
-                        """.formatted(UUID.randomUUID(), currency))
+                        {"name": "account-%s", "currency": "%s", "allowNegative": %b}
+                        """.formatted(UUID.randomUUID(), currency, allowNegative))
                 .exchange();
         assertThat(result).hasStatus(HttpStatus.CREATED);
         return idOf(result);
