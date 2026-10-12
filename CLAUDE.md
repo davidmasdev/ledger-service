@@ -19,6 +19,7 @@ Every line must be explainable in an interview.
 - Postings and journal entries are append-only: never UPDATE or DELETE them. Corrections are reversal entries.
 - Money is `BigDecimal` (or `long` minor units) with an explicit currency. Never `double`/`float`.
 - A posting's currency must match its account's currency.
+- An account with `allow_negative = false` never has a negative balance. The check runs under `SELECT … FOR UPDATE` on the accounts the entry debits, for every write (entries, reversals, transfers).
 - When locking several accounts, lock them in ascending id order (deadlock avoidance).
 - Writes that move money accept an `Idempotency-Key`; a replay returns the original response.
 
