@@ -120,6 +120,21 @@ class JournalEntryApiTests {
     }
 
     @Test
+    void replayWithEquivalentAmountsIsTheSameRequest() throws Exception {
+        long a = openAccount("USD");
+        long b = openAccount("USD");
+        var key = newKey();
+
+        var first = post(key, entry(posting(a, "USD", "25.00"), posting(b, "USD", "-25.00")));
+        var replay = post(key, entry(posting(a, "USD", "25"), posting(b, "USD", "-25.0")));
+
+        assertThat(replay).hasStatus(HttpStatus.CREATED);
+        assertThat(replay.getResponse().getContentAsString())
+                .isEqualTo(first.getResponse().getContentAsString());
+        assertThat(balanceOf(a)).isEqualTo("25.00");
+    }
+
+    @Test
     void rejectsSameKeyWithDifferentRequest() {
         long a = openAccount("USD");
         long b = openAccount("USD");
