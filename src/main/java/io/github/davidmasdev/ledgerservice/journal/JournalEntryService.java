@@ -28,9 +28,23 @@ public class JournalEntryService {
 
     @Transactional
     public JournalEntryResponse post(String idempotencyKey, PostJournalEntryRequest request) {
-        // Records have a value-based toString, so equal requests describe themselves identically.
-        long entryId = idempotency.execute(idempotencyKey, "POST /journal-entries " + request, () -> create(request));
+        long entryId = idempotency.execute(idempotencyKey, fingerprint(request), () -> create(request));
         return JournalEntryResponse.from(find(entryId));
+    }
+
+    /**
+     * Describes the request so that equivalent requests describe themselves identically: amounts are normalized, so a
+     * retry sending {@code 10} instead of {@code 10.00} is recognized as the same request.
+     */
+    private static String fingerprint(PostJournalEntryRequest request) {
+        var postings = request.postings().stream()
+                .map(p -> "%d:%s:%s"
+                        .formatted(
+                                p.accountId(),
+                                p.currency(),
+                                p.amount().stripTrailingZeros().toPlainString()))
+                .toList();
+        return "POST /journal-entries " + List.of(request.description(), postings);
     }
 
     @Transactional
