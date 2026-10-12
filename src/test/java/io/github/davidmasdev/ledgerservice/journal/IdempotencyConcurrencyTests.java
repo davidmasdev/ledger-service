@@ -18,7 +18,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 @IntegrationTest
 class IdempotencyConcurrencyTests {
 
-    private static final int REQUESTS = 10;
+    // Each request holds a connection while it waits on the key's row lock, so stay below Hikari's default pool of 10.
+    private static final int REQUESTS = 8;
 
     @Autowired
     AccountService accounts;
