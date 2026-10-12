@@ -52,16 +52,21 @@ public class IdempotencyService {
 
         var stored = jdbc.sql("select request_hash, journal_entry_id from idempotency_keys where key = ?")
                 .param(key)
-                .query((rs, rowNum) -> new StoredKey(rs.getString("request_hash"), rs.getLong("journal_entry_id")))
+                .query((rs, rowNum) ->
+                        new StoredKey(rs.getString("request_hash"), rs.getObject("journal_entry_id", Long.class)))
                 .single();
         if (!stored.requestHash().equals(requestHash)) {
             throw new BusinessRuleViolationException(
                     "Idempotency-Key '%s' was already used for a different request".formatted(key));
         }
+        // Never happens while the key and its entry are written in one transaction; fail loudly if that ever changes.
+        if (stored.journalEntryId() == null) {
+            throw new IllegalStateException("Idempotency-Key '%s' has no journal entry".formatted(key));
+        }
         return stored.journalEntryId();
     }
 
-    private record StoredKey(String requestHash, long journalEntryId) {}
+    private record StoredKey(String requestHash, Long journalEntryId) {}
 
     private static String sha256(String value) {
         try {
