@@ -21,7 +21,8 @@ public class AccountService {
         if (accounts.existsByName(request.name())) {
             throw new ConflictException("An account named '%s' already exists".formatted(request.name()));
         }
-        var account = accounts.save(new Account(request.name(), request.currency()));
+        var allowNegative = Boolean.TRUE.equals(request.allowNegative());
+        var account = accounts.save(new Account(request.name(), request.currency(), allowNegative));
         return AccountResponse.from(account, BigDecimal.ZERO);
     }
 
