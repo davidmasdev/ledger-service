@@ -5,7 +5,12 @@ import java.time.Instant;
 import java.util.List;
 
 public record JournalEntryResponse(
-        long id, String description, Long reversalOf, Instant createdAt, List<PostingResponse> postings) {
+        long id,
+        EntryKind kind,
+        String description,
+        Long reversalOf,
+        Instant createdAt,
+        List<PostingResponse> postings) {
 
     public record PostingResponse(long accountId, String currency, String amount) {}
 
@@ -15,6 +20,11 @@ public record JournalEntryResponse(
                         p.getAccountId(), p.getCurrency(), Money.format(p.getAmount(), p.getCurrency())))
                 .toList();
         return new JournalEntryResponse(
-                entry.getId(), entry.getDescription(), entry.getReversalOf(), entry.getCreatedAt(), postings);
+                entry.getId(),
+                entry.getKind(),
+                entry.getDescription(),
+                entry.getReversalOf(),
+                entry.getCreatedAt(),
+                postings);
     }
 }

@@ -5,6 +5,7 @@ import static java.util.stream.Collectors.toMap;
 import io.github.davidmasdev.ledgerservice.account.Account;
 import io.github.davidmasdev.ledgerservice.account.AccountRepository;
 import io.github.davidmasdev.ledgerservice.idempotency.IdempotencyService;
+import io.github.davidmasdev.ledgerservice.outbox.OutboxWriter;
 import io.github.davidmasdev.ledgerservice.shared.BusinessRuleViolationException;
 import io.github.davidmasdev.ledgerservice.shared.ConflictException;
 import io.github.davidmasdev.ledgerservice.shared.NotFoundException;
@@ -23,11 +24,17 @@ public class JournalEntryService {
     private final JournalEntryRepository entries;
     private final AccountRepository accounts;
     private final IdempotencyService idempotency;
+    private final OutboxWriter outbox;
 
-    JournalEntryService(JournalEntryRepository entries, AccountRepository accounts, IdempotencyService idempotency) {
+    JournalEntryService(
+            JournalEntryRepository entries,
+            AccountRepository accounts,
+            IdempotencyService idempotency,
+            OutboxWriter outbox) {
         this.entries = entries;
         this.accounts = accounts;
         this.idempotency = idempotency;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -35,8 +42,8 @@ public class JournalEntryService {
         var lines = request.postings().stream()
                 .map(p -> new PostingLine(p.accountId(), p.currency(), p.amount()))
                 .toList();
-        long entryId =
-                idempotency.execute(idempotencyKey, fingerprint(request), () -> record(request.description(), lines));
+        long entryId = idempotency.execute(
+                idempotencyKey, fingerprint(request), () -> record(EntryKind.ENTRY, request.description(), lines));
         return JournalEntryResponse.from(find(entryId));
     }
 
@@ -72,8 +79,8 @@ public class JournalEntryService {
      * caller is responsible for idempotency.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public long record(String description, List<PostingLine> lines) {
-        return save(JournalEntry.create(description, lines));
+    public long record(EntryKind kind, String description, List<PostingLine> lines) {
+        return save(JournalEntry.create(kind, description, lines));
     }
 
     private long createReversal(long entryId) {
@@ -85,11 +92,16 @@ public class JournalEntryService {
         return save(JournalEntry.reversalOf(original));
     }
 
-    /** The single write path: every entry is checked against its accounts and their balances before it is saved. */
+    /**
+     * The single write path: every entry is checked against its accounts and their balances, saved, and announced
+     * through the outbox in the same transaction, so the event exists if and only if the entry does.
+     */
     private long save(JournalEntry entry) {
         var accountsById = checkAccounts(entry.getPostings());
         checkBalances(entry.getPostings(), accountsById);
-        return entries.save(entry).getId();
+        var saved = entries.save(entry);
+        outbox.append(saved.getId(), JournalEntryRecorded.TYPE, JournalEntryRecorded.from(saved));
+        return saved.getId();
     }
 
     /** Every posting must target an existing account in that account's currency. */
