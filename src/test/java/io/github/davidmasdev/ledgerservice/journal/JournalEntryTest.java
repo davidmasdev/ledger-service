@@ -15,7 +15,8 @@ class JournalEntryTest {
 
     @Test
     void acceptsBalancedEntry() {
-        var entry = JournalEntry.create("Rent", List.of(line(1, "USD", "-100.00"), line(2, "USD", "100.00")));
+        var entry = JournalEntry.create(
+                EntryKind.ENTRY, "Rent", List.of(line(1, "USD", "-100.00"), line(2, "USD", "100.00")));
 
         assertThat(entry.getPostings()).hasSize(2);
     }
@@ -23,6 +24,7 @@ class JournalEntryTest {
     @Test
     void acceptsEntryThatBalancesInEachCurrency() {
         var entry = JournalEntry.create(
+                EntryKind.ENTRY,
                 "FX trade",
                 List.of(
                         line(1, "USD", "-110.00"),
@@ -37,7 +39,7 @@ class JournalEntryTest {
     void rejectsEntryThatOnlyBalancesAcrossCurrencies() {
         var lines = List.of(line(1, "USD", "10.00"), line(2, "EUR", "-10.00"));
 
-        assertThatThrownBy(() -> JournalEntry.create("Mixed", lines))
+        assertThatThrownBy(() -> JournalEntry.create(EntryKind.ENTRY, "Mixed", lines))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .hasMessageContaining("EUR");
     }
@@ -46,7 +48,7 @@ class JournalEntryTest {
     void rejectsUnbalancedEntry() {
         var lines = List.of(line(1, "USD", "-100.00"), line(2, "USD", "99.99"));
 
-        assertThatThrownBy(() -> JournalEntry.create("Off by a cent", lines))
+        assertThatThrownBy(() -> JournalEntry.create(EntryKind.ENTRY, "Off by a cent", lines))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .hasMessageContaining("sum to");
     }
@@ -55,7 +57,7 @@ class JournalEntryTest {
     void rejectsSinglePosting() {
         var lines = List.of(line(1, "USD", "10.00"));
 
-        assertThatThrownBy(() -> JournalEntry.create("Lonely", lines))
+        assertThatThrownBy(() -> JournalEntry.create(EntryKind.ENTRY, "Lonely", lines))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .hasMessageContaining("at least 2");
     }
@@ -64,7 +66,7 @@ class JournalEntryTest {
     void rejectsZeroAmount() {
         var lines = List.of(line(1, "USD", "0.00"), line(2, "USD", "0"));
 
-        assertThatThrownBy(() -> JournalEntry.create("Nothing", lines))
+        assertThatThrownBy(() -> JournalEntry.create(EntryKind.ENTRY, "Nothing", lines))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .hasMessageContaining("zero");
     }
@@ -74,14 +76,15 @@ class JournalEntryTest {
     void rejectsMoreDecimalsThanTheCurrencyAllows(String currency, String amount) {
         var lines = List.of(line(1, currency, amount), line(2, currency, "-" + amount));
 
-        assertThatThrownBy(() -> JournalEntry.create("Too precise", lines))
+        assertThatThrownBy(() -> JournalEntry.create(EntryKind.ENTRY, "Too precise", lines))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .hasMessageContaining("decimal places");
     }
 
     @Test
     void acceptsTrailingZerosBeyondTheCurrencyPrecision() {
-        var entry = JournalEntry.create("Padded", List.of(line(1, "JPY", "500.00"), line(2, "JPY", "-500")));
+        var entry = JournalEntry.create(
+                EntryKind.ENTRY, "Padded", List.of(line(1, "JPY", "500.00"), line(2, "JPY", "-500")));
 
         assertThat(entry.getPostings()).hasSize(2);
     }
@@ -91,20 +94,38 @@ class JournalEntryTest {
     void rejectsCodesThatAreNotSpendableCurrencies(String currency) {
         var lines = List.of(line(1, currency, "1"), line(2, currency, "-1"));
 
-        assertThatThrownBy(() -> JournalEntry.create("Funny money", lines))
+        assertThatThrownBy(() -> JournalEntry.create(EntryKind.ENTRY, "Funny money", lines))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .hasMessageContaining(currency);
     }
 
     @Test
     void reversalNegatesEveryPosting() {
-        var original = JournalEntry.create("Rent", List.of(line(1, "USD", "-100.00"), line(2, "USD", "100.00")));
+        var original = JournalEntry.create(
+                EntryKind.ENTRY, "Rent", List.of(line(1, "USD", "-100.00"), line(2, "USD", "100.00")));
 
         var reversal = JournalEntry.reversalOf(original);
 
         assertThat(reversal.getPostings())
                 .extracting(Posting::getAccountId, Posting::getAmount)
                 .containsExactly(tuple(1L, new BigDecimal("100.00")), tuple(2L, new BigDecimal("-100.00")));
+        assertThat(reversal.getKind()).isEqualTo(EntryKind.REVERSAL);
+    }
+
+    @Test
+    void keepsTheKindItWasCreatedWith() {
+        var transfer = JournalEntry.create(
+                EntryKind.TRANSFER, "Transfer", List.of(line(1, "USD", "-5.00"), line(2, "USD", "5.00")));
+
+        assertThat(transfer.getKind()).isEqualTo(EntryKind.TRANSFER);
+    }
+
+    @Test
+    void reversalsCanOnlyBeCreatedFromTheEntryTheyReverse() {
+        var lines = List.of(line(1, "USD", "-5.00"), line(2, "USD", "5.00"));
+
+        assertThatThrownBy(() -> JournalEntry.create(EntryKind.REVERSAL, "Fake reversal", lines))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static PostingLine line(long accountId, String currency, String amount) {

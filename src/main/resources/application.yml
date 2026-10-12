@@ -5,3 +5,21 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  kafka:
+    # Spring Boot's Docker Compose support has no Kafka connection details, so compose.yaml publishes a fixed port.
+    # Tests override this through @ServiceConnection on the Testcontainers KafkaContainer.
+    bootstrap-servers: localhost:9092
+    producer:
+      # Wait for all in-sync replicas, and let the producer deduplicate its own retries.
+      acks: all
+      properties:
+        enable.idempotence: true
+
+ledger:
+  outbox:
+    topic: ledger.journal-entries
+    batch-size: 100
+    send-timeout: 10s
+    relay:
+      enabled: true
+      poll-interval: 500ms

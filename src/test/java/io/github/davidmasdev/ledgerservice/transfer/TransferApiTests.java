@@ -47,6 +47,7 @@ class TransferApiTests {
         assertThat(result).hasStatus(HttpStatus.CREATED);
         assertThat(result.getResponse().getHeader("Location")).matches(".*/journal-entries/\\d+");
         assertThat(result).bodyJson().extractingPath("$.postings.length()").isEqualTo(2);
+        assertThat(result).bodyJson().extractingPath("$.kind").isEqualTo("TRANSFER");
         assertThat(ledger.balanceOf(from)).isEqualTo("70.00");
         assertThat(ledger.balanceOf(to)).isEqualTo("30.00");
     }

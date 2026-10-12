@@ -1,6 +1,7 @@
 package io.github.davidmasdev.ledgerservice.transfer;
 
 import io.github.davidmasdev.ledgerservice.idempotency.IdempotencyService;
+import io.github.davidmasdev.ledgerservice.journal.EntryKind;
 import io.github.davidmasdev.ledgerservice.journal.JournalEntryResponse;
 import io.github.davidmasdev.ledgerservice.journal.JournalEntryService;
 import io.github.davidmasdev.ledgerservice.journal.PostingLine;
@@ -35,6 +36,7 @@ public class TransferService {
                 ? "Transfer from account %d to account %d".formatted(request.fromAccountId(), request.toAccountId())
                 : request.description();
         return journal.record(
+                EntryKind.TRANSFER,
                 description,
                 List.of(
                         new PostingLine(

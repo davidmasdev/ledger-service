@@ -5,6 +5,8 @@ import io.github.davidmasdev.ledgerservice.shared.Money;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -37,6 +39,10 @@ public class JournalEntry {
     @Column(nullable = false, length = 500)
     private String description;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private EntryKind kind;
+
     @Column(name = "reversal_of")
     private Long reversalOf;
 
@@ -49,8 +55,9 @@ public class JournalEntry {
 
     protected JournalEntry() {} // for JPA
 
-    private JournalEntry(String description, Long reversalOf, List<PostingLine> lines) {
+    private JournalEntry(EntryKind kind, String description, Long reversalOf, List<PostingLine> lines) {
         validate(lines);
+        this.kind = kind;
         this.description = description;
         this.reversalOf = reversalOf;
         // PostgreSQL stores microseconds; truncating keeps the in-memory value equal to the stored one.
@@ -60,8 +67,11 @@ public class JournalEntry {
         }
     }
 
-    public static JournalEntry create(String description, List<PostingLine> lines) {
-        return new JournalEntry(description, null, lines);
+    public static JournalEntry create(EntryKind kind, String description, List<PostingLine> lines) {
+        if (kind == EntryKind.REVERSAL) {
+            throw new IllegalArgumentException("Reversals are created with JournalEntry.reversalOf");
+        }
+        return new JournalEntry(kind, description, null, lines);
     }
 
     /** A new entry that cancels {@code original} by posting every amount with the opposite sign. */
@@ -70,7 +80,7 @@ public class JournalEntry {
                 .map(p -> new PostingLine(
                         p.getAccountId(), p.getCurrency(), p.getAmount().negate()))
                 .toList();
-        return new JournalEntry("Reversal of journal entry " + original.id, original.id, lines);
+        return new JournalEntry(EntryKind.REVERSAL, "Reversal of journal entry " + original.id, original.id, lines);
     }
 
     private static void validate(List<PostingLine> lines) {
@@ -100,6 +110,10 @@ public class JournalEntry {
 
     public Long getId() {
         return id;
+    }
+
+    public EntryKind getKind() {
+        return kind;
     }
 
     public String getDescription() {
