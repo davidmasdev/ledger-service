@@ -28,6 +28,7 @@ class JournalEntryApiTests {
 
         assertThat(result).hasStatus(HttpStatus.CREATED).containsHeader("Location");
         assertThat(result).bodyJson().extractingPath("$.postings.length()").isEqualTo(2);
+        assertThat(result).bodyJson().extractingPath("$.kind").isEqualTo("ENTRY");
         assertThat(balanceOf(cash)).isEqualTo("100.00");
         assertThat(balanceOf(revenue)).isEqualTo("-100.00");
     }
@@ -166,6 +167,7 @@ class JournalEntryApiTests {
         var reversal = reverse(newKey(), entryId);
 
         assertThat(reversal).hasStatus(HttpStatus.CREATED);
+        assertThat(JsonPath.<String>read(body(reversal), "$.kind")).isEqualTo("REVERSAL");
         assertThat(JsonPath.<Number>read(body(reversal), "$.reversalOf").longValue())
                 .isEqualTo(entryId);
         assertThat(balanceOf(a)).isEqualTo("0.00");
