@@ -14,6 +14,7 @@ Every line must be explainable in an interview.
 - Single test class: `./mvnw test -Dtest=ClassName`
 - Run locally: `./mvnw spring-boot:run` (starts Postgres and Kafka from `compose.yaml` automatically; Kafka needs host port 9092)
 - Run with Testcontainers instead: `./mvnw spring-boot:test-run`
+- Load test (k6, native): `k6 run -e RATE=500 load-test/transfers.js` against a running app; see `load-test/README.md`. Results go in `load-test/RESULTS.md`.
 
 ## Domain invariants (never violate)
 - Every journal entry has >= 2 postings, and its postings sum to exactly zero **per currency**.
