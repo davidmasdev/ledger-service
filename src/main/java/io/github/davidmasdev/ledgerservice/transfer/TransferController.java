@@ -1,6 +1,10 @@
 package io.github.davidmasdev.ledgerservice.transfer;
 
 import io.github.davidmasdev.ledgerservice.journal.JournalEntryResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -14,6 +18,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequestMapping("/transfers")
+@Tag(name = "Transfers")
 class TransferController {
 
     private final TransferService transfers;
@@ -24,8 +29,21 @@ class TransferController {
 
     /** A transfer is recorded as a journal entry, so the new resource lives under {@code /journal-entries}. */
     @PostMapping
+    @Operation(
+            summary = "Move money between two accounts",
+            description = "Recorded as a journal entry of kind TRANSFER; Location points to it.")
+    @ApiResponse(responseCode = "201", description = "Transfer recorded (or the original response, on a replay)")
+    @ApiResponse(responseCode = "400", description = "Invalid request or missing Idempotency-Key")
+    @ApiResponse(
+            responseCode = "422",
+            description = "Insufficient funds, same account twice, currency mismatch, unknown account, "
+                    + "or the key was already used for a different request")
     ResponseEntity<JournalEntryResponse> transfer(
-            @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 255) String idempotencyKey,
+            @Parameter(description = "Unique per logical request; retries reuse it")
+                    @RequestHeader("Idempotency-Key")
+                    @NotBlank
+                    @Size(max = 255)
+                    String idempotencyKey,
             @Valid @RequestBody TransferRequest request,
             UriComponentsBuilder uriBuilder) {
         var entry = transfers.transfer(idempotencyKey, request);
