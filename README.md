@@ -105,11 +105,15 @@ You need Java 25 and Docker.
 ./mvnw spring-boot:run   # run on :8080; PostgreSQL and Kafka start from compose.yaml (Kafka uses host port 9092)
 ```
 
+With the app running, open **Swagger UI at <http://localhost:8080/swagger-ui.html>** to browse and call the API from
+the browser. Use "Try it out", and remember to fill in `Idempotency-Key` for writes. The OpenAPI document is at
+`/v3/api-docs`.
+
 The database schema is managed only by Flyway (`src/main/resources/db/migration`). Hibernate just validates it.
 
 ## Testing
 
-67 tests, all run by CI on every push and pull request:
+74 tests, all run by CI on every push and pull request:
 
 - **Concurrency.** 20 simultaneous transfers of 10.00 from an account holding 100.00: exactly 10 succeed and 10 are
   rejected, and the final balance is 0.00. A second test runs entries that debit the same accounts in opposite
@@ -120,6 +124,8 @@ The database schema is managed only by Flyway (`src/main/resources/db/migration`
 - **Outbox, end to end:** a transfer reaches a real Kafka broker. Another test shows that a failed send leaves events
   pending until a retry succeeds.
 - API tests for every endpoint and error case, and unit tests for the double-entry rules.
+- **API documentation:** tests check that the generated OpenAPI document matches the real contract (required
+  `Idempotency-Key`, `201` responses, Problem Details errors, amounts as strings).
 
 **Load test:** [k6](load-test/README.md), open model. **500 transfers/s sustained** across two runs (0 errors, p95
 19–32 ms). Throughput from a single hot account is capped at about 120/s by its row lock, by design. Method, tables and

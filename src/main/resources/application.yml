@@ -15,6 +15,10 @@ spring:
       properties:
         enable.idempotence: true
 
+springdoc:
+  # Swagger UI at /swagger-ui.html, OpenAPI JSON at /v3/api-docs. Success bodies are JSON (the default is */*).
+  default-produces-media-type: application/json
+
 ledger:
   outbox:
     topic: ledger.journal-entries
